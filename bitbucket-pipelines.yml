@@ -1,0 +1,82 @@
+image: node:12.18.2
+
+options:
+  max-time: 5
+
+definitions:
+  steps:
+    - step: &Build
+        name: Build-Deploy
+        deployment: prod
+        image: node:12.18.2
+        caches:
+          - node
+        script:
+          - apt install zip
+          - echo -e PUBLIC_PATH=$PUBLIC_PATH >> .env
+          - echo -e AUTH_SERVICE=$AUTH_SERVICE >> .env
+          - echo -e PARAMETRIZATION_SERVICE=$PARAMETRIZATION_SERVICE >> .env
+          - echo -e MODULE_SERVICE=$MODULE_SERVICE >> .env
+          - echo -e ISSUE_SERVICE=$ISSUE_SERVICE >> .env
+          - echo -e USER_SERVICE=$USER_SERVICE >> .env
+          - echo -e IMPROVEMENT_SERVICE=$IMPROVEMENT_SERVICE >> .env
+          - echo -e HALCON=$HALCON >> .env
+          - echo -e MANAGE=$MANAGE >> .env
+          - echo -e ALICANTO=$ALICANTO >> .env
+          - npm install && npm run build
+          - zip -r -j dist.zip dist/
+          - curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
+          - unzip awscli-bundle.zip
+          - ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws
+        artifacts:
+          - dist.zip
+
+    - step: &Deploy-production
+        name: Deploy to Amplify - Prod
+        script:
+          - pipe: docker://lyaelectronic/aws-amplify-bitbucket-pipe:latest
+            variables:
+              AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+              AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+              AWS_REGION: $AWS_REGION
+              APP_ID: $APP_ID
+              ENVIROMENT_NAME: prod
+              ZIP_FILE_ROUTE: $ZIP_FILE_ROUTE
+
+    - step: &Deploy-testing
+        name: Deploy using docker
+        deployment: test
+        image: docker:latest
+        script:
+          - echo -e PUBLIC_PATH=$PUBLIC_PATH >> .env
+          - echo -e AUTH_SERVICE=$AUTH_SERVICE >> .env
+          - echo -e PARAMETRIZATION_SERVICE=$PARAMETRIZATION_SERVICE >> .env
+          - echo -e MODULE_SERVICE=$MODULE_SERVICE >> .env
+          - echo -e ISSUE_SERVICE=$ISSUE_SERVICE >> .env
+          - echo -e USER_SERVICE=$USER_SERVICE >> .env
+          - echo -e IMPROVEMENT_SERVICE=$IMPROVEMENT_SERVICE >> .env
+          - echo -e HALCON=$HALCON >> .env
+          - echo -e MANAGE=$MANAGE >> .env
+          - echo -e ALICANTO=$ALICANTO >> .env
+          - docker build -t $REGISTRY_HOST/$IMAGE_NAME:build-$BITBUCKET_BUILD_NUMBER .
+          - docker tag $REGISTRY_HOST/$IMAGE_NAME:build-$BITBUCKET_BUILD_NUMBER $REGISTRY_HOST/$IMAGE_NAME:develop
+          - docker login $REGISTRY_HOST --username $REGISTRY_USER --password $REGISTRY_PASSWORD
+          - docker push $REGISTRY_HOST/$IMAGE_NAME:build-$BITBUCKET_BUILD_NUMBER
+          - docker push $REGISTRY_HOST/$IMAGE_NAME:develop
+          - apk add curl
+          - curl -v -f -m 1 -H "Authorization:Bearer ${WATCHTOWER_TOKEN}" ${WATCHTOWER_HOST}/v1/update || true
+        services:
+          - docker
+
+pipelines:
+  custom:
+    stage:
+      - step: *Deploy-testing
+  branches:
+    develop:
+      - step: *Deploy-testing
+
+  tags:
+    v*:
+      - step: *Build
+      - step: *Deploy-production

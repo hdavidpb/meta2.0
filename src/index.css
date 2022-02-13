@@ -1,0 +1,35 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+.link_action {
+  margin-top: 1rem;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.4s;
+  text-decoration: none;
+}
+
+.link_action p {
+  font-size: 15px;
+  color: white;
+  font-weight: 600;
+}
+.link_action:hover {
+  background: #ffffff33;
+}
+
+.active_link {
+  font-size: 15px;
+  color: purple;
+  font-weight: 600;
+  background: #ffffff33;
+}
